@@ -853,44 +853,77 @@ static ssize_t rtl8366_write_debugfs_reg(struct file *file,
 }
 
 static ssize_t rtl8366_read_debugfs_mibs(struct file *file,
-					 char __user *user_buf,
-					 size_t count, loff_t *ppos)
+					 char __user *user_buf, size_t count,
+					 loff_t *ppos)
 {
 	struct rtl8366_smi *smi = file->private_data;
 	int i, j, len = 0;
-	char *buf = smi->buf;
+	char *buf;
+	size_t buf_size;
+	ssize_t ret_val;
 
-	len += snprintf(buf + len, sizeof(smi->buf) - len, "%-36s",
-			"Counter");
+	/* 计算需要的缓冲区大小：
+	 * 每行：计数器名称(36) + 空格(1) + 每个端口(20字符) * 端口数 + 换行符(1)
+	 * 行数：MIB计数器数量 + 1（标题行）
+	 */
+	buf_size = (36 + 1 + smi->num_ports * 20 + 1) *
+		   (smi->num_mib_counters + 1);
+
+	/* 添加一些额外的空间以防万一 */
+	buf_size += 100;
+
+	/* 动态分配缓冲区 */
+	buf = kvmalloc(buf_size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	/* 打印表头 */
+	len += snprintf(buf + len, buf_size - len, "%-36s", "Counter");
 
 	for (i = 0; i < smi->num_ports; i++) {
 		char port_buf[10];
 
 		snprintf(port_buf, sizeof(port_buf), "Port %d", i);
-		len += snprintf(buf + len, sizeof(smi->buf) - len, " %12s",
-				port_buf);
+		len += snprintf(buf + len, buf_size - len, " %12s", port_buf);
 	}
-	len += snprintf(buf + len, sizeof(smi->buf) - len, "\n");
+	len += snprintf(buf + len, buf_size - len, "\n");
 
+	/* 打印MIB计数器数据 */
 	for (i = 0; i < smi->num_mib_counters; i++) {
-		len += snprintf(buf + len, sizeof(smi->buf) - len, "%-36s ",
+		len += snprintf(buf + len, buf_size - len, "%-36s ",
 				smi->mib_counters[i].name);
+
 		for (j = 0; j < smi->num_ports; j++) {
 			unsigned long long counter = 0;
 
-			if (!smi->ops->get_mib_counter(smi, i, j, &counter))
-				len += snprintf(buf + len,
-						sizeof(smi->buf) - len,
+			if (!smi->ops->get_mib_counter(smi, i, j, &counter)) {
+				len += snprintf(buf + len, buf_size - len,
 						"%12llu ", counter);
-			else
-				len += snprintf(buf + len,
-						sizeof(smi->buf) - len,
+			} else {
+				len += snprintf(buf + len, buf_size - len,
 						"%12s ", "error");
+			}
 		}
-		len += snprintf(buf + len, sizeof(smi->buf) - len, "\n");
+		len += snprintf(buf + len, buf_size - len, "\n");
+
+		/* 简单检查，确保不会溢出（理论上不应该发生） */
+		if (len >= buf_size - 100) {
+			/* 预留100字节空间用于添加截断信息 */
+			break;
+		}
 	}
 
-	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	/* 如果缓冲区接近满，添加截断信息 */
+	if (len >= buf_size - 50) {
+		len += snprintf(
+			buf + len, buf_size - len,
+			"\n[Output truncated, buffer size: %zu bytes]\n",
+			buf_size);
+	}
+
+	ret_val = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	kvfree(buf);
+	return ret_val;
 }
 
 static const struct file_operations fops_rtl8366_regs = {
