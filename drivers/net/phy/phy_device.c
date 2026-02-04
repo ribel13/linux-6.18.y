@@ -3544,8 +3544,7 @@ static int phy_remove(struct device *dev)
  * @new_driver: new phy_driver to register
  * @owner: module owning this PHY
  */
-static int phy_driver_register(struct phy_driver *new_driver,
-			       struct module *owner)
+int phy_driver_register(struct phy_driver *new_driver, struct module *owner)
 {
 	int retval;
 
@@ -3588,6 +3587,7 @@ static int phy_driver_register(struct phy_driver *new_driver,
 
 	return 0;
 }
+EXPORT_SYMBOL(phy_driver_register);
 
 static void phy_driver_unregister(struct phy_driver *drv)
 {
