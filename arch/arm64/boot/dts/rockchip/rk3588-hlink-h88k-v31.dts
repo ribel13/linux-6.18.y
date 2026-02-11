@@ -407,11 +407,6 @@
 	phy-mode = "rgmii";
 	tx_delay = <0x3e>;
 	rx_delay = <0x2f>;
-
-	snps,reset-gpio = <&gpio4 RK_PB3 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	/* Reset time is 20ms, 100ms for rtl8211f */
-	snps,reset-delays-us = <0 20000 100000>;
 };
 
 &hdmi0 {
@@ -643,8 +638,21 @@
 
 &mdio0 {
 	rgmii_phy: phy@1 {
-		compatible = "ethernet-phy-ieee802.3-c22";
+		compatible = "ethernet-phy-id001c.c916";
 		reg = <0x1>;
+
+		/*
+		 * RTL8211F Custom LED Mode B
+		 * LED1 (Green):   Active 10/100/1000
+		 * LED2 (Yellow):  Link 10/100/1000
+		 */
+		realtek,led-data = <0xae00>;
+
+		pinctrl-0 = <&eth_phy0_reset_pin>;
+		pinctrl-names = "default";
+		reset-assert-us = <20000>;
+		reset-deassert-us = <100000>;
+		reset-gpios = <&gpio4 RK_PB3 GPIO_ACTIVE_LOW>;
 	};
 };
 
@@ -807,6 +815,12 @@
 			rockchip,pins = <3 RK_PA6 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 
+	};
+
+	gmac0 {
+		eth_phy0_reset_pin: eth-phy0-reset-pin {
+			rockchip,pins = <4 RK_PB3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
 	};
 
 	hdmirx {
